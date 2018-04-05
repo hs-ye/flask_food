@@ -15,13 +15,15 @@ sqlalchemy.__version__  # should be 1.2.4 for correct environment
 
 # %% set up class/object to connect to database
 from sqlalchemy import create_engine
-engine = create_engine("postgresql://postgres:1234qwer@localhost/food_db", echo=True)
+engine = create_engine("postgresql://hungy:1234qwer@localhost/food_db", echo=True)
 
 # the class that links python classes to SQL tables
 from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 from sqlalchemy import Column, Integer, String, ARRAY  # case sensitive
+
+# %%
 class Recipe(Base):
 	# this says that each Recipe will be stored in a table called recipes in the db
 	__tablename__ = 'recipes'
@@ -168,14 +170,67 @@ session.commit()
 
 # %% Have to figure out what happens when the session drops
 
+# %% Bi-direction many to many
+from sqlalchemy import create_engine
+engine = create_engine("postgresql://hungy:1234qwer@localhost/food_db", echo=True)
+
+# the class that links python classes to SQL tables
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Numeric, Column, Integer, String, ARRAY  # case sensitive
+from sqlalchemy import MetaData
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import relationship
+
+class Association(Base):
+    __tablename__ = 'association'
+    left_id = Column(Integer, ForeignKey('left.id'), primary_key=True)
+    right_id = Column(Integer, ForeignKey('right.id'), primary_key=True)
+    extra_data = Column(String(50))
+    child = relationship("Child", back_populates="parents")
+    parent = relationship("Parent", back_populates="children")
+
+class Parent(Base):
+    __tablename__ = 'left'
+    id = Column(Integer, primary_key=True)
+    children = relationship("Association", back_populates="parent")
+
+class Child(Base):
+    __tablename__ = 'right'
+    id = Column(Integer, primary_key=True)
+    parents = relationship("Association", back_populates="child")
+
+Base.metadata.tables
+
+engine = create_engine("postgresql://hungy:1234qwer@localhost/food_db", echo=True)
+Base.metadata.create_all(engine)
+
+Session = sessionmaker(engine)
+session = Session()
 
 
+# %%
+# create parent, append a child via association
+p = Parent()
+a = Association(extra_data="some data")
+a2 = Association(extra_data="another test")
+
+a.child = Child()
+a2.child = Child()
+p.children.append(a)
+p.children.append(a2)
 
 
+# iterate through child objects via association, including association
+# attributes
+for assoc in p.children:
+    print(assoc.extra_data)
+    print(assoc.child)
 
+session.add_all([p, a])
+session.commit()
 
+# %%
 
-
-
-
-
+Base.metadata.drop_all(engine)

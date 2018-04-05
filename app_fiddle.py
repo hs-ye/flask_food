@@ -31,28 +31,33 @@ class User(db.Model):
 		return 'ID: {0} User: {1} email: {2}'.format(self.id, self.username,
 		    self.email)
 
-
+# Now with proper relationships set up for many to many/x table
 class Recipe(db.Model):
 	# __tablename__ = 'app.recipes'  # not how postgres schemas work
 	__tablename__ = 'recipes'
 	id = db.Column(db.Integer, primary_key=True)
 	rec_name = db.Column(db.String, unique=True, nullable=False)
-
+	ingredients = db.relationship("XRecIng", back_populates='recipe')
 
 class Ingredient(db.Model):
 	__tablename__ = 'ingredients'
 	id = db.Column(db.Integer, primary_key=True)
 	ing_name = db.Column(db.String, unique=True, nullable=False)
+	recipes = db.relationship("XRecIng", back_populates='ingredient')
 
-
+# the helper/cross table that links Recipes to Ingredients
 class XRecIng(db.Model):
 	__tablename__ = 'x_rec_ing'
 	id = db.Column(db.Integer, primary_key=True)
 	rec_id = db.Column(db.Integer, db.ForeignKey('recipes.id'))
 	ing_id = db.Column(db.Integer, db.ForeignKey('ingredients.id'))
 	qty = db.Column(db.Numeric)
-
+	recipe = db.relationship("Recipe", back_populates="ingredients")
+	ingredient = db.relationship("Ingredient", back_populates="recipes")
+# %%
+db.drop_all()
 db.create_all()
+db.metadata.tables
 ''' If you need to get the attached engine & binds for some reason
 db.get_engine()
 db.get_binds()
@@ -65,11 +70,48 @@ new_rec_name = 'porridge'
 new_rec = Recipe(rec_name=new_rec_name)
 
 # list of new ingredients
-ing_names = ['water', 'rice', 'pork']
+ing_names = {'water': 1.5, 'rice': 100, 'pork': 45}
 
-# add new ingredeints (TODO: check if already exists, only add if it doesn't)
-# needs to return the ID for each ingredient
-new_ing_list = [Ingredient(ing_name=ing) for ing in ing_names]
+'''
+# Adding stuff manually
+x_test = XRecIng(qty=100)
+x_test.ingredient = Ingredient(ing_name='water')
+new_rec.ingredients.append(x_test)
+'''
+
+# add new ingredients X objects, each must have correct ing reference
+x_list = {k: [XRecIng(qty=v) for k, v in ing_names.items()}
+x_list_full = []
+for k, v in x_list.items():
+	v.ingredient = Ingredient(ing_name=k)
+	x_list_full.append(v)
+	new_rec.ingredients.append(v)
+# seems to work! Note that final objects outputted are:
+		# new_rew for new recipe components
+		# the component output for each recipe
+
+# %% Checking
+x_list_full[1].ingredient.ing_name  # test the relationship worked
+x_list_full[2].ingredient.ing_name  # test the relationship worked
+
+for z in new_rec.ingredients:
+	print(z.qty)
+	print(z.ingredient)
+
+# %% Commit to database
+db.session.add_all([new_rec] + x_list_full)
+db.session.commit()
+
+# %% This is the model we want to replicate
+
+
+# ============ Done up to this one ============= #
+
+# TODO: Add a function that returns an existing instance of the DB obj
+# if it exists, or creates a new object with the ing_name if not
+
+
+
 
 # %% session: Add to transaction, then run query to get the IDs to put into the
 # x table
